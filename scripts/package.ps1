@@ -11,14 +11,12 @@ New-Item -ItemType Directory -Path $distPath -Force | Out-Null
 New-Item -ItemType Directory -Path $stagingPath | Out-Null
 
 try {
-  $files = @('manifest.json')
-
-  foreach ($file in $files) {
-    Copy-Item -LiteralPath (Join-Path $projectRoot $file) -Destination $stagingPath
-  }
-
+  Copy-Item -LiteralPath $manifestPath -Destination $stagingPath
   Copy-Item -LiteralPath (Join-Path $projectRoot 'icons') -Destination $stagingPath -Recurse
-  Copy-Item -LiteralPath (Join-Path $projectRoot 'src') -Destination $stagingPath -Recurse
+  $releaseSourcePath = Join-Path $stagingPath 'src'
+  New-Item -ItemType Directory -Path $releaseSourcePath | Out-Null
+  Copy-Item -LiteralPath (Join-Path $projectRoot 'src\background.js') -Destination $releaseSourcePath
+  Copy-Item -LiteralPath (Join-Path $projectRoot 'src\core.js') -Destination $releaseSourcePath
 
   if (Test-Path -LiteralPath $packagePath) {
     Remove-Item -LiteralPath $packagePath -Force

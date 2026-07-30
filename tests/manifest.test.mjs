@@ -30,3 +30,11 @@ test("runs directly from the toolbar action", () => {
 test("keeps package and manifest versions aligned", () => {
   assert.equal(packageMetadata.version, manifest.version);
 });
+
+test("ships without development metadata", () => {
+  assert.equal("version_name" in manifest, false);
+});
+
+test("ships without development commands", () => {
+  assert.equal("create_test_mess" in manifest.commands, false);
+});

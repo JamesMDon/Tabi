@@ -9,6 +9,7 @@ const MOVE_ATTEMPTS = 5;
 const SUCCESS_DURATION_MS = 2000;
 const PROBLEM_DURATION_MS = 5000;
 let running = false;
+let feedbackTimer;
 
 function delay(milliseconds) {
   return new Promise((resolve) => setTimeout(resolve, milliseconds));
@@ -18,32 +19,39 @@ function plural(count, singular, pluralForm = `${singular}s`) {
   return `${count} ${count === 1 ? singular : pluralForm}`;
 }
 
-function createSummary(mergedWindows, removedDuplicates, unresolvedPopups) {
+function createSummary(removedDuplicates, unresolvedPopups) {
   const parts = [];
-  if (mergedWindows) {
-    parts.push(`merged ${plural(mergedWindows, "window")}`);
-  }
   if (removedDuplicates) {
     parts.push(`removed ${plural(removedDuplicates, "duplicate")}`);
   }
   if (unresolvedPopups) {
     parts.push(`left ${plural(unresolvedPopups, "popup tab")}`);
   }
-  return parts.length ? parts.join(", ") : "no changes";
+  return parts.length ? parts.join(", ") : "done";
 }
 
 async function setFeedback(text, color, title) {
-  await chrome.action.setBadgeText({ text });
-  await chrome.action.setBadgeBackgroundColor({ color });
-  await chrome.action.setTitle({ title });
+  if (feedbackTimer) {
+    clearTimeout(feedbackTimer);
+    feedbackTimer = undefined;
+  }
+  await Promise.all([
+    chrome.action.setBadgeText({ text }),
+    chrome.action.setBadgeBackgroundColor({ color }),
+    chrome.action.setTitle({ title }),
+  ]);
 }
 
 function clearFeedbackAfter(milliseconds) {
-  const timer = setTimeout(async () => {
-    await chrome.action.setBadgeText({ text: "" });
-    await chrome.action.setTitle({ title: "Tabi" });
+  if (feedbackTimer) clearTimeout(feedbackTimer);
+  feedbackTimer = setTimeout(async () => {
+    feedbackTimer = undefined;
+    await Promise.all([
+      chrome.action.setBadgeText({ text: "" }),
+      chrome.action.setTitle({ title: "Tabi" }),
+    ]).catch(() => {});
   }, milliseconds);
-  timer?.unref?.();
+  feedbackTimer?.unref?.();
 }
 
 async function moveTabs(tabIds, moveProperties) {
@@ -63,12 +71,17 @@ async function moveTabs(tabIds, moveProperties) {
   }
 }
 
-async function getScopedWindows(incognito) {
+async function getScopedWindows(incognito, windowIds) {
+  const includedIds = windowIds ? new Set(windowIds) : null;
   const windows = await chrome.windows.getAll({
     populate: true,
     windowTypes: ["normal", "popup"],
   });
-  return windows.filter((window) => window.incognito === incognito);
+  return windows.filter(
+    (window) =>
+      window.incognito === incognito &&
+      (!includedIds || includedIds.has(window.id)),
+  );
 }
 
 function getWindowTabs(windows) {
@@ -80,6 +93,13 @@ function getWindowTabs(windows) {
   );
 }
 
+function hasSameTabOrder(current, desired) {
+  return (
+    current.length === desired.length &&
+    current.every((tab, index) => tab.id === desired[index].id)
+  );
+}
+
 function canReopenPopupUrl(url) {
   try {
     return ["http:", "https:"].includes(new URL(url).protocol);
@@ -88,72 +108,84 @@ function canReopenPopupUrl(url) {
   }
 }
 
-async function moveSourceTab(tab, targetWindowId) {
-  let unpinned = false;
-  if (tab.pinned) {
-    await chrome.tabs.update(tab.id, { pinned: false });
-    unpinned = true;
-  }
+async function reopenPopupTab(tab, targetWindowId) {
+  const url = getTabUrl(tab);
+  if (!canReopenPopupUrl(url)) return {};
 
+  let replacement;
   try {
-    await moveTabs([tab.id], { windowId: targetWindowId, index: -1 });
+    replacement = await chrome.tabs.create({
+      active: false,
+      url,
+      windowId: targetWindowId,
+    });
+    await chrome.tabs.remove(tab.id);
+    return { replacementId: replacement.id };
+  } catch (error) {
+    if (replacement?.id) {
+      await chrome.tabs.remove(replacement.id).catch(() => {});
+    }
+    console.warn("Tabi could not merge a popup tab:", error);
     return {};
-  } catch (moveError) {
-    if (tab.windowType !== "popup") {
-      if (unpinned) await chrome.tabs.update(tab.id, { pinned: true });
-      throw moveError;
-    }
-
-    const url = getTabUrl(tab);
-    if (!canReopenPopupUrl(url)) {
-      if (unpinned) await chrome.tabs.update(tab.id, { pinned: true });
-      return { unresolved: true };
-    }
-
-    let replacement;
-    try {
-      replacement = await chrome.tabs.create({
-        active: false,
-        url,
-        windowId: targetWindowId,
-      });
-      await chrome.tabs.remove(tab.id);
-      return { replacementId: replacement.id };
-    } catch (fallbackError) {
-      if (replacement?.id) {
-        await chrome.tabs.remove(replacement.id).catch(() => {});
-      }
-      if (unpinned) {
-        await chrome.tabs.update(tab.id, { pinned: true }).catch(() => {});
-      }
-      console.warn("Tabi could not merge a popup tab:", fallbackError);
-      return { unresolved: true };
-    }
   }
 }
 
-async function tidyTabs(targetWindowId) {
-  await setFeedback("…", "#888", "Tabi is tidying tabs");
+async function mergePopupTabs(popupTabs, targetWindowId, pinnedIds) {
+  if (!popupTabs.length) return 0;
+
+  try {
+    await moveTabs(
+      popupTabs.map((tab) => tab.id),
+      { windowId: targetWindowId, index: -1 },
+    );
+    return 0;
+  } catch {
+    let unresolved = 0;
+
+    for (const tab of popupTabs) {
+      const currentTab = await chrome.tabs.get(tab.id).catch(() => null);
+      if (!currentTab || currentTab.windowId === targetWindowId) continue;
+
+      try {
+        await moveTabs([tab.id], { windowId: targetWindowId, index: -1 });
+        continue;
+      } catch {
+        const result = await reopenPopupTab(tab, targetWindowId);
+        if (!result.replacementId) {
+          unresolved += 1;
+          continue;
+        }
+        if (pinnedIds.delete(tab.id)) {
+          pinnedIds.add(result.replacementId);
+        }
+      }
+    }
+
+    return unresolved;
+  }
+}
+
+export async function tidyTabs(
+  targetWindowId,
+  { showFeedback = true, windowIds } = {},
+) {
+  if (showFeedback) {
+    await setFeedback("…", "#888", "Tabi is tidying tabs");
+  }
 
   const targetWindow = await chrome.windows.get(targetWindowId);
   if (targetWindow.type !== "normal") {
     throw new Error("Run Tabi from a normal browser window.");
   }
 
-  let scopedWindows = await getScopedWindows(targetWindow.incognito);
-  const initialWindowCount = scopedWindows.length;
+  const scopedWindows = await getScopedWindows(
+    targetWindow.incognito,
+    windowIds,
+  );
   let tabs = getWindowTabs(scopedWindows);
   const activeTabId = tabs.find(
     (tab) => tab.windowId === targetWindowId && tab.active,
   )?.id;
-
-  const groupedIds = tabs
-    .filter((tab) => tab.groupId !== NO_GROUP_ID)
-    .map((tab) => tab.id);
-  if (groupedIds.length) await chrome.tabs.ungroup(groupedIds);
-
-  scopedWindows = await getScopedWindows(targetWindow.incognito);
-  tabs = getWindowTabs(scopedWindows);
   const plan = createDedupPlan(tabs, targetWindowId);
   const duplicateIds = new Set(plan.duplicateIds);
   const pinnedIds = new Set([
@@ -167,73 +199,102 @@ async function tidyTabs(targetWindowId) {
     await chrome.tabs.remove(plan.duplicateIds);
   }
 
-  scopedWindows = await getScopedWindows(targetWindow.incognito);
-  tabs = getWindowTabs(scopedWindows);
+  const groupedIds = tabs
+    .filter(
+      (tab) =>
+        tab.groupId !== NO_GROUP_ID && !duplicateIds.has(tab.id),
+    )
+    .map((tab) => tab.id);
+  if (groupedIds.length) await chrome.tabs.ungroup(groupedIds);
+
   const sourceTabs = tabs
-    .filter((tab) => tab.windowId !== targetWindowId)
+    .filter(
+      (tab) =>
+        tab.windowId !== targetWindowId && !duplicateIds.has(tab.id),
+    )
     .sort(
       (left, right) =>
         left.windowId - right.windowId || left.index - right.index,
     );
+  const normalTabIds = sourceTabs
+    .filter((tab) => tab.windowType === "normal")
+    .map((tab) => tab.id);
+  const popupTabs = sourceTabs.filter((tab) => tab.windowType === "popup");
 
-  let unresolvedPopupTabs = 0;
-  for (const tab of sourceTabs) {
-    const result = await moveSourceTab(tab, targetWindowId);
-    if (result.unresolved) unresolvedPopupTabs += 1;
-    if (result.replacementId && pinnedIds.delete(tab.id)) {
-      pinnedIds.add(result.replacementId);
-    }
-  }
-
-  tabs = await chrome.tabs.query({ windowId: targetWindowId });
-  for (const tab of tabs) {
-    const shouldBePinned = pinnedIds.has(tab.id);
-    if (tab.pinned !== shouldBePinned) {
-      await chrome.tabs.update(tab.id, { pinned: shouldBePinned });
-    }
-  }
+  await moveTabs(normalTabIds, { windowId: targetWindowId, index: -1 });
+  const unresolvedPopupTabs = await mergePopupTabs(
+    popupTabs,
+    targetWindowId,
+    pinnedIds,
+  );
 
   tabs = await chrome.tabs.query({ windowId: targetWindowId });
+  const tabsToPin = tabs.filter(
+    (tab) => pinnedIds.has(tab.id) && !tab.pinned,
+  );
+  if (tabsToPin.length) {
+    await Promise.all(
+      tabsToPin.map(async (tab) => {
+        await chrome.tabs.update(tab.id, { pinned: true });
+        tab.pinned = true;
+      }),
+    );
+  }
+
   const pinned = tabs.filter((tab) => tab.pinned).sort(compareTabsByUrl);
   const unpinned = tabs.filter((tab) => !tab.pinned).sort(compareTabsByUrl);
+  const currentPinned = tabs.filter((tab) => tab.pinned);
+  const currentUnpinned = tabs.filter((tab) => !tab.pinned);
+  const pinStateChanged = tabsToPin.length > 0;
 
-  await moveTabs(
-    pinned.map((tab) => tab.id),
-    { windowId: targetWindowId, index: 0 },
-  );
-  await moveTabs(
-    unpinned.map((tab) => tab.id),
-    { windowId: targetWindowId, index: pinned.length },
-  );
-
-  if (activeTabId) {
-    const activeTabExists = await chrome.tabs
-      .get(activeTabId)
-      .then(() => true)
-      .catch(() => false);
-    if (activeTabExists) await chrome.tabs.update(activeTabId, { active: true });
+  if (pinStateChanged || !hasSameTabOrder(currentPinned, pinned)) {
+    await moveTabs(
+      pinned.map((tab) => tab.id),
+      { windowId: targetWindowId, index: 0 },
+    );
   }
-  await chrome.windows.update(targetWindowId, { focused: true });
+  if (pinStateChanged || !hasSameTabOrder(currentUnpinned, unpinned)) {
+    await moveTabs(
+      unpinned.map((tab) => tab.id),
+      { windowId: targetWindowId, index: pinned.length },
+    );
+  }
 
-  const remainingWindows = await getScopedWindows(targetWindow.incognito);
-  const mergedWindowCount = initialWindowCount - remainingWindows.length;
+  const activeTabStillActive = tabs.some(
+    (tab) => tab.id === activeTabId && tab.active,
+  );
+  if (activeTabId && !activeTabStillActive) {
+    await chrome.tabs
+      .update(activeTabId, { active: true })
+      .catch(() => {});
+  }
   const summary = createSummary(
-    mergedWindowCount,
     plan.duplicateIds.length,
     unresolvedPopupTabs,
   );
 
   if (unresolvedPopupTabs) {
-    await setFeedback("!", "#F59E0B", `Tabi: ${summary}`);
-    clearFeedbackAfter(PROBLEM_DURATION_MS);
-    return;
+    if (showFeedback) {
+      await setFeedback("!", "#F59E0B", `Tabi: ${summary}`);
+      clearFeedbackAfter(PROBLEM_DURATION_MS);
+    }
+    return {
+      removedDuplicates: plan.duplicateIds.length,
+      unresolvedPopupTabs,
+    };
   }
 
   const badge = plan.duplicateIds.length
     ? `-${plan.duplicateIds.length}`
     : "✓";
-  await setFeedback(badge, "#4CAF50", `Tabi: ${summary}`);
-  clearFeedbackAfter(SUCCESS_DURATION_MS);
+  if (showFeedback) {
+    await setFeedback(badge, "#4CAF50", `Tabi: ${summary}`);
+    clearFeedbackAfter(SUCCESS_DURATION_MS);
+  }
+  return {
+    removedDuplicates: plan.duplicateIds.length,
+    unresolvedPopupTabs,
+  };
 }
 
 chrome.action.onClicked.addListener(async (tab) => {
