@@ -1,0 +1,11 @@
+{
+  "name": "tabi-extension",
+  "version": "1.3.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "check": "node --check src/background.js && node --check src/core.js && node --test",
+    "package": "npm run check && pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/package.ps1",
+    "test": "node --test"
+  }
+}
