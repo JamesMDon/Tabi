@@ -1,0 +1,32 @@
+{
+  "manifest_version": 3,
+  "name": "Tabi",
+  "description": "Tidy tabs: merge, sort, & de-duplicate.",
+  "version": "1.2.0",
+  "icons": {
+    "16": "icons/Tabi16.png",
+    "48": "icons/Tabi48.png",
+    "128": "icons/Tabi128.png",
+    "512": "icons/Tabi512.png"
+  },
+  "action": {
+    "default_icon": {
+      "16": "icons/Tabi16.png",
+      "48": "icons/Tabi48.png",
+      "128": "icons/Tabi128.png"
+    }
+  },
+  "permissions": ["tabs"],
+  "commands": {
+    "_execute_action": {
+      "suggested_key": {
+        "default": "Alt+T",
+        "mac": "Alt+T"
+      },
+      "description": "Tidy tabs"
+    }
+  },
+  "background": {
+    "service_worker": "src/background.js"
+  }
+}
