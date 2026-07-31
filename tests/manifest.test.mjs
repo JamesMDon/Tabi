@@ -31,6 +31,12 @@ test("keeps package and manifest versions aligned", () => {
   assert.equal(packageMetadata.version, manifest.version);
 });
 
+test("keeps store metadata concise", () => {
+  assert.ok(manifest.name.length <= 45);
+  assert.ok(manifest.short_name.length <= 12);
+  assert.ok(manifest.description.length <= 132);
+});
+
 test("ships without development metadata", () => {
   assert.equal("version_name" in manifest, false);
 });
