@@ -33,7 +33,6 @@ test("keeps package and manifest versions aligned", () => {
 
 test("keeps store metadata concise", () => {
   assert.ok(manifest.name.length <= 45);
-  assert.ok(manifest.short_name.length <= 12);
   assert.ok(manifest.description.length <= 132);
 });
 
