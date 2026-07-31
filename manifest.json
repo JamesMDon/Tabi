@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Tabi",
-  "description": "Instant Clean Tabs. Merge windows, remove exact duplicate tabs, preserve pins, & sort by URL in one click.",
+  "description": "Instant Clean Tabs: Merge, sort, & de-duplicate.",
   "version": "1.3.0",
   "incognito": "spanning",
   "icons": {
