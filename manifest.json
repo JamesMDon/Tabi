@@ -1,7 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "Tabi",
-  "description": "Tidy tabs: merge, sort, and de-duplicate.",
+  "name": "Tabi: One-Click Tab Cleanup",
+  "short_name": "Tabi",
+  "description": "Merge windows, remove exact duplicate tabs, preserve pins, and sort by URL in one click.",
   "version": "1.3.0",
   "incognito": "spanning",
   "icons": {
