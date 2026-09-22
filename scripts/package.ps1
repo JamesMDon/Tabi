@@ -12,6 +12,8 @@ New-Item -ItemType Directory -Path $stagingPath | Out-Null
 
 try {
   Copy-Item -LiteralPath $manifestPath -Destination $stagingPath
+  Copy-Item -LiteralPath (Join-Path $projectRoot 'LICENSE') -Destination $stagingPath
+  Copy-Item -LiteralPath (Join-Path $projectRoot 'PRIVACY.md') -Destination $stagingPath
   Copy-Item -LiteralPath (Join-Path $projectRoot 'icons') -Destination $stagingPath -Recurse
   $releaseSourcePath = Join-Path $stagingPath 'src'
   New-Item -ItemType Directory -Path $releaseSourcePath | Out-Null
@@ -26,13 +28,15 @@ try {
 } finally {
   $resolvedTempRoot = (Resolve-Path -LiteralPath ([System.IO.Path]::GetTempPath())).Path
   $resolvedStagingPath = (Resolve-Path -LiteralPath $stagingPath).Path
-  if (-not $resolvedStagingPath.StartsWith($resolvedTempRoot, [System.StringComparison]::OrdinalIgnoreCase)) {
+  if ((Split-Path -Parent $resolvedStagingPath) -ne $resolvedTempRoot.TrimEnd('\', '/')) {
     throw "Refusing to remove staging path outside the temporary directory: $resolvedStagingPath"
   }
   Remove-Item -LiteralPath $resolvedStagingPath -Recurse -Force
 }
 
 $hash = Get-FileHash -LiteralPath $packagePath -Algorithm SHA256
+"$($hash.Hash.ToLowerInvariant())  $([System.IO.Path]::GetFileName($packagePath))" |
+  Set-Content -LiteralPath "$packagePath.sha256" -Encoding ascii
 [pscustomobject]@{
   Package = $packagePath
   SHA256 = $hash.Hash

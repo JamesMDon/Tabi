@@ -39,6 +39,28 @@ test("never treats tabs with unavailable URLs as duplicates", () => {
   assert.deepEqual(plan.duplicateIds, []);
 });
 
+test("keeps a tab navigating away from a duplicate committed URL", () => {
+  const plan = createDedupPlan(
+    [
+      tab({ id: 1, active: true }),
+      tab({ id: 2, pendingUrl: "https://example.com/next" }),
+    ],
+    10,
+  );
+
+  assert.deepEqual(plan.duplicateIds, []);
+});
+
+test("sorts a navigating tab by its destination", () => {
+  const tabs = [
+    tab({ id: 1, url: "https://example.com/a", pendingUrl: "https://example.com/z" }),
+    tab({ id: 2, url: "https://example.com/b" }),
+  ];
+
+  tabs.sort(compareTabsByUrl);
+  assert.deepEqual(tabs.map((candidate) => candidate.id), [2, 1]);
+});
+
 test("keeps the active target-window tab when duplicate URLs collide", () => {
   const plan = createDedupPlan(
     [
