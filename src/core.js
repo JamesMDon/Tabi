@@ -1,5 +1,5 @@
 export function getTabUrl(tab) {
-  return tab.url || tab.pendingUrl || "";
+  return tab.pendingUrl || tab.url || "";
 }
 
 export function compareTabsByUrl(left, right) {
