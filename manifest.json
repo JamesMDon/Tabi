@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "Tabi",
   "description": "Instantly de-duplicate, merge, & sort tabs.",
-  "version": "1.4.0",
+  "version": "1.4.1",
   "homepage_url": "https://github.com/JamesMDon/Tabi",
   "incognito": "spanning",
   "icons": {
