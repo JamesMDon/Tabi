@@ -18,8 +18,8 @@ sorted together. Popup tabs are moved when the browser supports it; otherwise,
 normal web URLs are reopened before the original popup is closed. Pressing
 **Alt+T** in a popup window tidies into the last focused normal window.
 
-The icon briefly turns into a check when done, `!` if a popup tab was left, or
-`×` if tidying failed; hover it for details.
+The icon turns into a check for 1s when done, `!` for 3s if a popup tab was
+left, or `×` for 5s if tidying failed. Hover it for the last run's details.
 
 ## Development
 
