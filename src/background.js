@@ -6,7 +6,8 @@ import {
 
 const NO_GROUP_ID = -1;
 const MOVE_ATTEMPTS = 5;
-const SUCCESS_DURATION_MS = 2000;
+const SUCCESS_DURATION_MS = 1000;
+const WARN_DURATION_MS = 3000;
 const PROBLEM_DURATION_MS = 5000;
 let running = false;
 let feedbackTimer;
@@ -31,7 +32,7 @@ function createSummary(removedDuplicates, unresolvedPopups) {
 }
 
 // The toolbar icon briefly morphs into a done, warn, or fail glyph; the title
-// carries the details.
+// keeps the last run's details after the icon reverts.
 function setIcon(name) {
   return chrome.action.setIcon({
     path: { 16: `/icons/${name}16.png`, 32: `/icons/${name}32.png` },
@@ -50,10 +51,7 @@ function clearFeedbackAfter(milliseconds) {
   if (feedbackTimer) clearTimeout(feedbackTimer);
   feedbackTimer = setTimeout(async () => {
     feedbackTimer = undefined;
-    await Promise.all([
-      setIcon("Tabi"),
-      chrome.action.setTitle({ title: "Tabi" }),
-    ]).catch(() => {});
+    await setIcon("Tabi").catch(() => {});
   }, milliseconds);
   feedbackTimer?.unref?.();
 }
@@ -289,7 +287,7 @@ export async function tidyTabs(
   if (showFeedback) {
     await setFeedback(unresolvedPopupTabs ? "warn" : "done", `Tabi: ${summary}`);
     clearFeedbackAfter(
-      unresolvedPopupTabs ? PROBLEM_DURATION_MS : SUCCESS_DURATION_MS,
+      unresolvedPopupTabs ? WARN_DURATION_MS : SUCCESS_DURATION_MS,
     );
   }
   return {

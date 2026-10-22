@@ -376,6 +376,7 @@ test("reopens a popup URL when the browser rejects a live move", async () => {
 
 test("leaves an unreopenable popup intact and shows a quiet warning", async () => {
   const harness = await createHarness({
+    captureTimers: true,
     rejectPopupMoves: true,
     initialWindows: [
       { id: 10, type: "normal", incognito: false },
@@ -396,11 +397,16 @@ test("leaves an unreopenable popup intact and shows a quiet warning", async () =
     ],
   });
 
-  await harness.click(1);
+  try {
+    await harness.click(1);
+  } finally {
+    harness.cleanup();
+  }
 
   assert.equal(harness.tabs.find((tab) => tab.id === 6)?.windowId, 40);
   assert.equal(harness.windows.has(40), true);
   assert.equal(harness.icon, "warn");
+  assert.equal(harness.scheduledTimers.at(-1).milliseconds, 3000);
   assert.equal(
     harness.title,
     "Tabi: left 1 popup tab",
@@ -606,9 +612,10 @@ test("cancels an older feedback timer when Tabi runs again", async () => {
     assert.equal(harness.scheduledTimers[0].cancelled, true);
     assert.equal(harness.scheduledTimers[1].cancelled, false);
 
+    assert.equal(harness.scheduledTimers[1].milliseconds, 1000);
     await harness.scheduledTimers[1].callback();
     assert.equal(harness.icon, "Tabi");
-    assert.equal(harness.title, "Tabi");
+    assert.equal(harness.title, "Tabi: done");
   } finally {
     harness.cleanup();
   }
