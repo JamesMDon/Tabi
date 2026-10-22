@@ -18,6 +18,9 @@ sorted together. Popup tabs are moved when the browser supports it; otherwise,
 normal web URLs are reopened before the original popup is closed. Pressing
 **Alt+T** in a popup window tidies into the last focused normal window.
 
+The icon briefly turns into a check when done, `!` if a popup tab was left, or
+`×` if tidying failed; hover it for details.
+
 ## Development
 
 Tabi is a Manifest V3 extension with no dependencies or network requests.

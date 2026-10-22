@@ -36,9 +36,15 @@ test("keeps store metadata concise", () => {
   assert.ok(manifest.description.length <= 132);
 });
 
-test("ships every manifest icon at its declared size", async () => {
-  const icons = { ...manifest.icons, ...manifest.action.default_icon };
-  for (const [size, path] of Object.entries(icons)) {
+test("ships every icon at its declared size", async () => {
+  const icons = [
+    ...Object.entries(manifest.icons),
+    ...Object.entries(manifest.action.default_icon),
+    ...["done", "warn", "fail"].flatMap((name) =>
+      [16, 32].map((size) => [size, `icons/${name}${size}.png`]),
+    ),
+  ];
+  for (const [size, path] of icons) {
     const png = await readFile(new URL(`../${path}`, import.meta.url));
     assert.equal(png.toString("latin1", 12, 16), "IHDR", path);
     assert.equal(png.readUInt32BE(16), Number(size), path);

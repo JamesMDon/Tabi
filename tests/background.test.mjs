@@ -24,7 +24,7 @@ async function createHarness({
   rejectPopupMoves = false,
   temporaryMoveFailures = 0,
 }) {
-  let badge = "";
+  let icon = "Tabi";
   let clickListener;
   let title = "Tabi";
   let nextTabId = 100;
@@ -84,10 +84,9 @@ async function createHarness({
           clickListener = listener;
         },
       },
-      async setBadgeText({ text }) {
-        badge = text;
+      async setIcon({ path }) {
+        icon = path[16].match(/\/icons\/(\w+)16\.png$/)[1];
       },
-      async setBadgeBackgroundColor() {},
       async setTitle({ title: nextTitle }) {
         title = nextTitle;
       },
@@ -233,8 +232,8 @@ async function createHarness({
     click: async (tabId) => {
       await clickListener(tabs.find((tab) => tab.id === tabId));
     },
-    get badge() {
-      return badge;
+    get icon() {
+      return icon;
     },
     get calls() {
       return calls;
@@ -327,7 +326,7 @@ test("one click merges normal and popup windows while preserving active pin stat
   assert.equal(harness.tabs.some((tab) => tab.id === 3), false);
   assert.equal(harness.tabs.find((tab) => tab.id === 5)?.windowId, 30);
   assert.equal(harness.windows.has(40), false);
-  assert.equal(harness.badge, "-1");
+  assert.equal(harness.icon, "done");
   assert.equal(
     harness.title,
     "Tabi: removed 1 duplicate",
@@ -368,7 +367,7 @@ test("reopens a popup URL when the browser rejects a live move", async () => {
   );
   assert.equal(harness.tabs.some((tab) => tab.id === 6), false);
   assert.equal(harness.windows.has(40), false);
-  assert.equal(harness.badge, "✓");
+  assert.equal(harness.icon, "done");
   assert.equal(
     harness.title,
     "Tabi: done",
@@ -401,7 +400,7 @@ test("leaves an unreopenable popup intact and shows a quiet warning", async () =
 
   assert.equal(harness.tabs.find((tab) => tab.id === 6)?.windowId, 40);
   assert.equal(harness.windows.has(40), true);
-  assert.equal(harness.badge, "!");
+  assert.equal(harness.icon, "warn");
   assert.equal(
     harness.title,
     "Tabi: left 1 popup tab",
@@ -441,7 +440,7 @@ test("tidies into the last focused normal window when run from a popup", async (
     [6, 1],
   );
   assert.equal(harness.windows.has(40), false);
-  assert.equal(harness.badge, "✓");
+  assert.equal(harness.icon, "done");
 });
 
 test("refuses a popup run when no matching normal window exists", async () => {
@@ -460,7 +459,7 @@ test("refuses a popup run when no matching normal window exists", async () => {
   await harness.click(6);
 
   assert.equal(harness.tabs.find((tab) => tab.id === 6)?.windowId, 40);
-  assert.equal(harness.badge, "×");
+  assert.equal(harness.icon, "fail");
   assert.equal(harness.title, "Tabi failed: Open a normal browser window first.");
 });
 
@@ -545,7 +544,7 @@ test("skips tab moves and active updates when the target is already tidy", async
 
   assert.deepEqual(harness.moveCalls, []);
   assert.equal(harness.calls.tabUpdate, 0);
-  assert.equal(harness.badge, "✓");
+  assert.equal(harness.icon, "done");
 });
 
 test("retries a temporary Brave tab edit lock", async () => {
@@ -581,7 +580,7 @@ test("retries a temporary Brave tab edit lock", async () => {
     harness.moveCalls.filter((call) => call.index === -1).length,
     2,
   );
-  assert.equal(harness.badge, "✓");
+  assert.equal(harness.icon, "done");
 });
 
 test("cancels an older feedback timer when Tabi runs again", async () => {
@@ -608,7 +607,7 @@ test("cancels an older feedback timer when Tabi runs again", async () => {
     assert.equal(harness.scheduledTimers[1].cancelled, false);
 
     await harness.scheduledTimers[1].callback();
-    assert.equal(harness.badge, "");
+    assert.equal(harness.icon, "Tabi");
     assert.equal(harness.title, "Tabi");
   } finally {
     harness.cleanup();
