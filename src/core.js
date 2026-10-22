@@ -2,13 +2,35 @@ export function getTabUrl(tab) {
   return tab.pendingUrl || tab.url || "";
 }
 
-export function compareTabsByUrl(left, right) {
-  const urlComparison = getTabUrl(left).localeCompare(getTabUrl(right), undefined, {
+// Web pages sort by site, ignoring the scheme & a leading "www.", so http &
+// https copies of a site sit together; browser & extension pages follow.
+function getSortKey(tab) {
+  const url = getTabUrl(tab);
+  try {
+    const { protocol, host, pathname, search, hash } = new URL(url);
+    if (protocol === "http:" || protocol === "https:") {
+      return [0, `${host.replace(/^www\./, "")}${pathname}${search}${hash}`];
+    }
+  } catch {}
+  return [1, url];
+}
+
+function compareText(left, right) {
+  return left.localeCompare(right, undefined, {
     numeric: true,
     sensitivity: "base",
   });
-  if (urlComparison !== 0) return urlComparison;
-  return left.id - right.id;
+}
+
+export function compareTabsByUrl(left, right) {
+  const [leftRank, leftKey] = getSortKey(left);
+  const [rightRank, rightKey] = getSortKey(right);
+  return (
+    leftRank - rightRank ||
+    compareText(leftKey, rightKey) ||
+    compareText(getTabUrl(left), getTabUrl(right)) ||
+    left.id - right.id
+  );
 }
 
 function survivorPriority(tab, targetWindowId) {
@@ -16,6 +38,8 @@ function survivorPriority(tab, targetWindowId) {
     Number(tab.windowId === targetWindowId && tab.active),
     Number(Boolean(tab.audible)),
     Number(tab.windowId === targetWindowId),
+    // A popup survivor may have to be reopened, losing its page state.
+    Number(tab.windowType !== "popup"),
     Number(tab.pinned),
     Number(tab.active),
     Number(tab.lastAccessed || 0),

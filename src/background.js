@@ -30,16 +30,20 @@ function createSummary(removedDuplicates, unresolvedPopups) {
   return parts.length ? parts.join(", ") : "done";
 }
 
-async function setFeedback(text, color, title) {
+// The toolbar icon briefly morphs into a done, warn, or fail glyph; the title
+// carries the details.
+function setIcon(name) {
+  return chrome.action.setIcon({
+    path: { 16: `/icons/${name}16.png`, 32: `/icons/${name}32.png` },
+  });
+}
+
+async function setFeedback(icon, title) {
   if (feedbackTimer) {
     clearTimeout(feedbackTimer);
     feedbackTimer = undefined;
   }
-  await Promise.all([
-    chrome.action.setBadgeText({ text }),
-    chrome.action.setBadgeBackgroundColor({ color }),
-    chrome.action.setTitle({ title }),
-  ]);
+  await Promise.all([setIcon(icon), chrome.action.setTitle({ title })]);
 }
 
 function clearFeedbackAfter(milliseconds) {
@@ -47,7 +51,7 @@ function clearFeedbackAfter(milliseconds) {
   feedbackTimer = setTimeout(async () => {
     feedbackTimer = undefined;
     await Promise.all([
-      chrome.action.setBadgeText({ text: "" }),
+      setIcon("Tabi"),
       chrome.action.setTitle({ title: "Tabi" }),
     ]).catch(() => {});
   }, milliseconds);
@@ -69,6 +73,21 @@ async function moveTabs(tabIds, moveProperties) {
       await delay(50 * attempt);
     }
   }
+}
+
+// Alt+T from a popup window tidies into the last focused normal window of
+// the same profile instead.
+async function getTargetWindow(windowId) {
+  const window = await chrome.windows.get(windowId);
+  if (window.type === "normal") return window;
+
+  const fallback = await chrome.windows
+    .getLastFocused({ windowTypes: ["normal"] })
+    .catch(() => null);
+  if (fallback?.type === "normal" && fallback.incognito === window.incognito) {
+    return fallback;
+  }
+  throw new Error("Open a normal browser window first.");
 }
 
 async function getScopedWindows(incognito, windowIds) {
@@ -169,14 +188,8 @@ export async function tidyTabs(
   targetWindowId,
   { showFeedback = true, windowIds } = {},
 ) {
-  if (showFeedback) {
-    await setFeedback("…", "#888", "Tabi is tidying tabs");
-  }
-
-  const targetWindow = await chrome.windows.get(targetWindowId);
-  if (targetWindow.type !== "normal") {
-    throw new Error("Run Tabi from a normal browser window.");
-  }
+  const targetWindow = await getTargetWindow(targetWindowId);
+  targetWindowId = targetWindow.id;
 
   const scopedWindows = await getScopedWindows(
     targetWindow.incognito,
@@ -273,23 +286,11 @@ export async function tidyTabs(
     unresolvedPopupTabs,
   );
 
-  if (unresolvedPopupTabs) {
-    if (showFeedback) {
-      await setFeedback("!", "#F59E0B", `Tabi: ${summary}`);
-      clearFeedbackAfter(PROBLEM_DURATION_MS);
-    }
-    return {
-      removedDuplicates: plan.duplicateIds.length,
-      unresolvedPopupTabs,
-    };
-  }
-
-  const badge = plan.duplicateIds.length
-    ? `-${plan.duplicateIds.length}`
-    : "✓";
   if (showFeedback) {
-    await setFeedback(badge, "#4CAF50", `Tabi: ${summary}`);
-    clearFeedbackAfter(SUCCESS_DURATION_MS);
+    await setFeedback(unresolvedPopupTabs ? "warn" : "done", `Tabi: ${summary}`);
+    clearFeedbackAfter(
+      unresolvedPopupTabs ? PROBLEM_DURATION_MS : SUCCESS_DURATION_MS,
+    );
   }
   return {
     removedDuplicates: plan.duplicateIds.length,
@@ -306,7 +307,7 @@ chrome.action.onClicked.addListener(async (tab) => {
   } catch (error) {
     console.error("Tabi:", error);
     const message = error instanceof Error ? error.message : String(error);
-    await setFeedback("×", "#F44336", `Tabi failed: ${message}`);
+    await setFeedback("fail", `Tabi failed: ${message}`).catch(() => {});
     clearFeedbackAfter(PROBLEM_DURATION_MS);
   } finally {
     running = false;

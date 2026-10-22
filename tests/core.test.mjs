@@ -102,6 +102,32 @@ test("keeps a target-window tab ahead of an imported pinned duplicate", () => {
   assert.deepEqual(plan.pinIds, [3]);
 });
 
+test("sorts web pages by site, ignoring scheme & www, before browser pages", () => {
+  const tabs = [
+    tab({ id: 1, url: "brave://settings/" }),
+    tab({ id: 2, url: "https://www.zeta.example/" }),
+    tab({ id: 3, url: "https://beta.example/b" }),
+    tab({ id: 4, url: "http://beta.example/a" }),
+    tab({ id: 5, url: "https://alpha.example/" }),
+  ];
+
+  tabs.sort(compareTabsByUrl);
+  assert.deepEqual(tabs.map((candidate) => candidate.id), [5, 4, 3, 2, 1]);
+});
+
+test("keeps a movable normal-window duplicate ahead of a popup copy", () => {
+  const plan = createDedupPlan(
+    [
+      tab({ id: 3, windowId: 20 }),
+      tab({ id: 4, windowId: 30, windowType: "popup", active: true }),
+    ],
+    10,
+  );
+
+  assert.deepEqual(plan.survivorIds, [3]);
+  assert.deepEqual(plan.duplicateIds, [4]);
+});
+
 test("sorts consistently using committed and pending URLs", () => {
   const tabs = [
     tab({ id: 8, url: "", pendingUrl: "https://example.com/b" }),

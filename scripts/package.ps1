@@ -12,9 +12,12 @@ New-Item -ItemType Directory -Path $stagingPath | Out-Null
 
 try {
   Copy-Item -LiteralPath $manifestPath -Destination $stagingPath
-  Copy-Item -LiteralPath (Join-Path $projectRoot 'LICENSE') -Destination $stagingPath
+  Copy-Item -LiteralPath (Join-Path $projectRoot 'LICENSE-MIT') -Destination $stagingPath
+  Copy-Item -LiteralPath (Join-Path $projectRoot 'LICENSE-APACHE') -Destination $stagingPath
   Copy-Item -LiteralPath (Join-Path $projectRoot 'PRIVACY.md') -Destination $stagingPath
-  Copy-Item -LiteralPath (Join-Path $projectRoot 'icons') -Destination $stagingPath -Recurse
+  $releaseIconsPath = Join-Path $stagingPath 'icons'
+  New-Item -ItemType Directory -Path $releaseIconsPath | Out-Null
+  Copy-Item -Path (Join-Path $projectRoot 'icons/*.png') -Destination $releaseIconsPath
   $releaseSourcePath = Join-Path $stagingPath 'src'
   New-Item -ItemType Directory -Path $releaseSourcePath | Out-Null
   Copy-Item -LiteralPath (Join-Path $projectRoot 'src\background.js') -Destination $releaseSourcePath
