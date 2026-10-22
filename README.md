@@ -14,7 +14,8 @@ Click the icon or press **Alt+T** to:
 Regular and incognito windows stay separate. Tabs without an available URL are
 never removed as duplicates. Tab groups are flattened because all tabs are
 sorted together. Popup tabs are moved when the browser supports it; otherwise,
-normal web URLs are reopened before the original popup is closed.
+normal web URLs are reopened before the original popup is closed. Pressing
+**Alt+T** in a popup window tidies into the last focused normal window.
 
 ## Development
 
@@ -29,6 +30,10 @@ npm run package
 
 Load the repository folder from `brave://extensions` or
 `chrome://extensions`. Packaging writes the store ZIP to `dist/`.
+
+`npm run icons` redraws `icons/Tabi.svg` & the PNGs with headless Brave. It
+loads `playwright-core` from `PLAYWRIGHT_CORE` (a `package.json` path) & Brave
+from `BRAVE` when set.
 
 ## Install
 
@@ -59,4 +64,4 @@ Tab URLs are processed locally when Tabi runs. Nothing is stored or sent. See
 
 ## License
 
-[MIT](LICENSE)
+[MIT](LICENSE-MIT) or [Apache-2.0](LICENSE-APACHE), at your option.

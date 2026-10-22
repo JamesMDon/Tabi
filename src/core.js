@@ -16,6 +16,8 @@ function survivorPriority(tab, targetWindowId) {
     Number(tab.windowId === targetWindowId && tab.active),
     Number(Boolean(tab.audible)),
     Number(tab.windowId === targetWindowId),
+    // A popup survivor may have to be reopened, losing its page state.
+    Number(tab.windowType !== "popup"),
     Number(tab.pinned),
     Number(tab.active),
     Number(tab.lastAccessed || 0),

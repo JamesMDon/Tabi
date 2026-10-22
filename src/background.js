@@ -71,6 +71,21 @@ async function moveTabs(tabIds, moveProperties) {
   }
 }
 
+// Alt+T from a popup window tidies into the last focused normal window of
+// the same profile instead.
+async function getTargetWindow(windowId) {
+  const window = await chrome.windows.get(windowId);
+  if (window.type === "normal") return window;
+
+  const fallback = await chrome.windows
+    .getLastFocused({ windowTypes: ["normal"] })
+    .catch(() => null);
+  if (fallback?.type === "normal" && fallback.incognito === window.incognito) {
+    return fallback;
+  }
+  throw new Error("Open a normal browser window first.");
+}
+
 async function getScopedWindows(incognito, windowIds) {
   const includedIds = windowIds ? new Set(windowIds) : null;
   const windows = await chrome.windows.getAll({
@@ -173,10 +188,8 @@ export async function tidyTabs(
     await setFeedback("…", "#888", "Tabi is tidying tabs");
   }
 
-  const targetWindow = await chrome.windows.get(targetWindowId);
-  if (targetWindow.type !== "normal") {
-    throw new Error("Run Tabi from a normal browser window.");
-  }
+  const targetWindow = await getTargetWindow(targetWindowId);
+  targetWindowId = targetWindow.id;
 
   const scopedWindows = await getScopedWindows(
     targetWindow.incognito,

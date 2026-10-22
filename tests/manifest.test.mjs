@@ -36,6 +36,27 @@ test("keeps store metadata concise", () => {
   assert.ok(manifest.description.length <= 132);
 });
 
+test("ships every manifest icon at its declared size", async () => {
+  const icons = { ...manifest.icons, ...manifest.action.default_icon };
+  for (const [size, path] of Object.entries(icons)) {
+    const png = await readFile(new URL(`../${path}`, import.meta.url));
+    assert.equal(png.toString("latin1", 12, 16), "IHDR", path);
+    assert.equal(png.readUInt32BE(16), Number(size), path);
+    assert.equal(png.readUInt32BE(20), Number(size), path);
+  }
+});
+
+test("draws the logo in a single brand color", async () => {
+  const svg = await readFile(
+    new URL("../icons/Tabi.svg", import.meta.url),
+    "utf8",
+  );
+  assert.deepEqual(
+    [...new Set(svg.match(/#[0-9a-f]{3,6}\b/gi))],
+    ["#0af"],
+  );
+});
+
 test("ships without development metadata", () => {
   assert.equal("version_name" in manifest, false);
 });

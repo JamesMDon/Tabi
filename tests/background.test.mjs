@@ -20,6 +20,7 @@ async function createHarness({
   captureTimers = false,
   initialTabs,
   initialWindows,
+  lastFocusedWindowId,
   rejectPopupMoves = false,
   temporaryMoveFailures = 0,
 }) {
@@ -100,6 +101,11 @@ async function createHarness({
       async get(windowId) {
         calls.windowGet += 1;
         return windows.get(windowId);
+      },
+      async getLastFocused() {
+        const window = windows.get(lastFocusedWindowId);
+        if (!window) throw new Error("No last-focused window");
+        return window;
       },
       async getAll({ windowTypes }) {
         calls.windowGetAll += 1;
@@ -400,6 +406,62 @@ test("leaves an unreopenable popup intact and shows a quiet warning", async () =
     harness.title,
     "Tabi: left 1 popup tab",
   );
+});
+
+test("tidies into the last focused normal window when run from a popup", async () => {
+  const harness = await createHarness({
+    lastFocusedWindowId: 10,
+    initialWindows: [
+      { id: 10, type: "normal", incognito: false },
+      { id: 40, type: "popup", incognito: false },
+    ],
+    initialTabs: [
+      makeTab({
+        id: 1,
+        windowId: 10,
+        active: true,
+        url: "https://example.com/z",
+      }),
+      makeTab({
+        id: 6,
+        windowId: 40,
+        active: true,
+        url: "https://example.com/a",
+      }),
+    ],
+  });
+
+  await harness.click(6);
+
+  assert.deepEqual(
+    harness.tabs
+      .filter((tab) => tab.windowId === 10)
+      .sort((left, right) => left.index - right.index)
+      .map((tab) => tab.id),
+    [6, 1],
+  );
+  assert.equal(harness.windows.has(40), false);
+  assert.equal(harness.badge, "✓");
+});
+
+test("refuses a popup run when no matching normal window exists", async () => {
+  const harness = await createHarness({
+    lastFocusedWindowId: 10,
+    initialWindows: [
+      { id: 10, type: "normal", incognito: true },
+      { id: 40, type: "popup", incognito: false },
+    ],
+    initialTabs: [
+      makeTab({ id: 1, windowId: 10, active: true, incognito: true }),
+      makeTab({ id: 6, windowId: 40, active: true }),
+    ],
+  });
+
+  await harness.click(6);
+
+  assert.equal(harness.tabs.find((tab) => tab.id === 6)?.windowId, 40);
+  assert.equal(harness.badge, "×");
+  assert.equal(harness.title, "Tabi failed: Open a normal browser window first.");
 });
 
 test("moves ordinary source tabs in one batch", async () => {
