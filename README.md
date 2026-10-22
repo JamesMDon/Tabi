@@ -8,7 +8,8 @@ Click the icon or press **Alt+T** to:
 
 - merge browser windows into the current window;
 - remove exact duplicate URLs;
-- sort tabs by URL; and
+- sort tabs by site & URL, ignoring `https://` & `www.`, with browser pages
+  last; and
 - preserve the active tab and pinned state.
 
 Regular and incognito windows stay separate. Tabs without an available URL are
